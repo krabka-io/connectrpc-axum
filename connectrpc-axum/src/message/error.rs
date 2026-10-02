@@ -29,7 +29,7 @@ pub use connectrpc_axum_core::{Code, ErrorDetail, Status};
 #[derive(Clone)]
 pub struct ConnectError {
     inner: Status,
-    meta: Option<HeaderMap>,
+    meta: Option<Box<HeaderMap>>,
 }
 
 impl std::fmt::Debug for ConnectError {
@@ -155,13 +155,13 @@ impl ConnectError {
 
     /// Get the metadata headers, if any.
     pub fn meta(&self) -> Option<&HeaderMap> {
-        self.meta.as_ref()
+        self.meta.as_deref()
     }
 
     /// Get mutable access to metadata headers.
     /// Lazily initializes the HeaderMap if not present.
     pub fn meta_mut(&mut self) -> &mut HeaderMap {
-        self.meta.get_or_insert_with(HeaderMap::new)
+        self.meta.get_or_insert_with(Box::default)
     }
 
     /// Add a metadata header.
@@ -200,7 +200,7 @@ impl ConnectError {
 
     /// Set metadata from HeaderMap.
     pub fn set_meta_from_headers(mut self, headers: &HeaderMap) -> Self {
-        self.meta = Some(headers.clone());
+        self.meta = Some(Box::new(headers.clone()));
         self
     }
 }
@@ -520,7 +520,7 @@ impl From<::tonic::Status> for ConnectError {
             }
         }
         if !metadata.is_empty() {
-            err.meta = Some(metadata);
+            err.meta = Some(Box::new(metadata));
         }
 
         err
@@ -812,6 +812,58 @@ pub(crate) fn internal_error_streaming_response(content_type: &'static str) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_error_fits_inline_result_error_budget() {
+        let size = std::mem::size_of::<ConnectError>();
+        assert!(size <= 128, "ConnectError occupies {size} bytes");
+    }
+
+    #[test]
+    fn metadata_clone_mutation_preserves_independent_http_headers() {
+        let mut err = ConnectError::new(Code::NotFound, "missing");
+        assert!(err.meta().is_none());
+        err.meta_mut()
+            .append("x-request-id", HeaderValue::from_static("original"));
+        err.meta_mut()
+            .append("x-request-id", HeaderValue::from_static("second"));
+        err.meta_mut()
+            .insert("grpc-status", HeaderValue::from_static("13"));
+
+        let mut cloned = err.clone();
+        cloned
+            .meta_mut()
+            .insert("x-request-id", HeaderValue::from_static("cloned"));
+        assert_eq!(
+            err.meta().unwrap().get_all("x-request-id").iter().count(),
+            2
+        );
+        assert_eq!(
+            cloned.meta().unwrap().get("x-request-id").unwrap(),
+            "cloned"
+        );
+
+        let response = err.into_response_with_protocol(RequestProtocol::ConnectUnaryJson);
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let values: Vec<_> = response.headers().get_all("x-request-id").iter().collect();
+        assert_eq!(values, ["original", "second"]);
+        assert!(response.headers().get("grpc-status").is_none());
+
+        let response = cloned.into_response_with_protocol(RequestProtocol::ConnectUnaryJson);
+        assert_eq!(response.headers().get("x-request-id").unwrap(), "cloned");
+        assert!(response.headers().get("grpc-status").is_none());
+    }
+
+    #[test]
+    fn set_metadata_copies_headers_for_http_response() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-request-id", HeaderValue::from_static("original"));
+        let err = ConnectError::from_code(Code::Internal).set_meta_from_headers(&headers);
+        headers.insert("x-request-id", HeaderValue::from_static("changed"));
+
+        let response = err.into_response_with_protocol(RequestProtocol::ConnectUnaryJson);
+        assert_eq!(response.headers().get("x-request-id").unwrap(), "original");
+    }
 
     #[test]
     fn test_connect_error_new() {
