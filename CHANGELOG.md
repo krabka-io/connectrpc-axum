@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-03
+
+### Fixed
+
+- Preserve the compact Connect RPC error representation used by Krabka's async handlers, including independent metadata headers when errors are cloned.
+
 ## [0.2.4] - 2026-10-03
 
 ### Fixed
