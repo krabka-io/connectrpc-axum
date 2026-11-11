@@ -1,3 +1,12 @@
+# Organization update - 2026-11-11
+
+- Adopt the shared krabka-io CI gate and validate merge queue groups.
+- Prepare `connectrpc-axum` 0.2.6.
+- Prepare `connectrpc-axum-build` 0.2.6.
+- Prepare `connectrpc-axum-benchmarks` 0.2.6.
+- Prepare `connectrpc-axum-core` 0.2.2.
+- Prepare `connectrpc-axum-client` 0.2.4.
+
 # Changelog
 
 
