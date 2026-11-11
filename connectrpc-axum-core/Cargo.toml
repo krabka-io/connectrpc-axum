@@ -1,6 +1,6 @@
 [package]
 name = "connectrpc-axum-core"
-version = "0.2.1"
+version = "0.2.2"
 edition.workspace = true
 description = "Core protocol types for connectrpc-axum (shared between client and server)"
 repository.workspace = true

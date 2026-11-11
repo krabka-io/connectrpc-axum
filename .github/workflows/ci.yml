@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  merge_group:
   push:
     branches:
       - main
@@ -51,3 +52,13 @@ jobs:
 
       - name: Run CI checks
         run: cargo make ci
+
+  gate:
+    name: gate
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: krabka-io/tooling/actions/gate@a42cceef18200f4f282ae5a090856f63125a12ff
+        with:
+          results: ${{ toJSON(needs) }}
